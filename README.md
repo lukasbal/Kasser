@@ -5,11 +5,16 @@ En lille app til at holde øje med jeres CS2 kasse-investeringer - én visning t
 ## Sådan virker det
 
 - Antal kasser pr. person er hentet fra jeres Excel-ark og ligger i `src/data/holdings.js`.
-- Appen henter den billigste aktive CSFloat-annonce for hver kasse og regner værdien om til DKK.
-- I skal selv indtaste jeres gennemsnitlige **købspris pr. stk.** i tabellen for at se profit - arket havde ikke et entydigt tal for det. Det gemmes automatisk i browseren (så det er der næste gang, men kun på den computer/browser).
-- To varer kunne appen ikke slå op automatisk:
-  - Fars M9 Bayonet Doppler (Phase 3) - Doppler-faser kan ikke findes præcist via CSFloats almindelige søgning, så prisen skal indtastes manuelt.
-  - Sønnens "Sealed Genesis Terminal" og "Sealed Dead Hand Terminal" - navnene matchede ikke en kendt CS2-kasse. Ret `marketHashName` i `src/data/holdings.js`, hvis I finder det rigtige navn, så bliver de også hentet automatisk.
+- Appen henter den billigste aktive CSFloat-annonce for hver kasse/kniv og regner værdien om til DKK.
+- **Profit** regnes ikke ud fra en indtastet købspris (arket havde ikke ét entydigt tal for det pr. kasse). I stedet bruges jeres egne historiske tal:
+  - **Far**: kassepriserne fra jeres første pristjek (2025-01-10) som baseline pr. kasse, og kniven bruger den faktiske anskaffelsespris (6354,32 kr. købt + 297,68 kr. i gebyrer = 6652 kr).
+  - **Søn**: ingen pr.-kasse baseline findes i arket, så profit vises samlet siden første logning af porteføljeværdien (2025-01-07, 18.280,29 kr).
+- Der er en graf over samlet porteføljeværdi over tid, bygget af jeres historiske tal fra arket. Hver gang appen åbnes, gemmes dagens samlede værdi også lokalt i browseren, så grafen fortsætter fremover.
+- Fars M9 Bayonet Doppler hentes automatisk som **Phase 3** - Doppler-faser bestemmes af "paint index" (fast pr. fase, ens på tværs af knive), ikke af paint seed, så det kan slås præcist op uden manuel indtastning.
+
+## Hvis priser ikke kan hentes (CORS-fejl)
+
+CSFloat sender ikke nødvendigvis CORS-headers, der tillader kald direkte fra en browser på jeres GitHub Pages-domæne. Appen prøver derfor et direkte kald først og falder automatisk tilbage til en offentlig CORS-proxy (`allorigins.win`), hvis det fejler. Under "Avanceret: CSFloat-adgang" nederst i appen kan I indtaste jeres egen proxy/API, hvis I får bygget en (skal acceptere en URL-parameter og videresende kaldet til CSFloat), eller skrive `none` for at slå proxy'en fra.
 
 ## Kør appen lokalt
 

@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Bar,
-  BarChart,
   CartesianGrid,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
 import { PEOPLE } from './data/holdings';
-import { fetchPrices, fetchUsdToDkk } from './lib/csfloat';
-import { useCostBasis } from './lib/useCostBasis';
+import { fetchPrices, fetchUsdToDkk, cacheKeyFor, getSettings, saveSettings } from './lib/csfloat';
 import { useManualPrice } from './lib/useManualPrice';
+import { logTodaysValue, getLoggedHistory } from './lib/valueLog';
 import './App.css';
 
 const DKK = new Intl.NumberFormat('da-DK', {
@@ -24,20 +24,39 @@ const DKK2 = new Intl.NumberFormat('da-DK', {
   currency: 'DKK',
   maximumFractionDigits: 2,
 });
+const DATE_FMT = new Intl.DateTimeFormat('da-DK', { day: '2-digit', month: 'short' });
 
 function allItemsFor(personKey) {
   const person = PEOPLE[personKey];
   return person.knife ? [...person.holdings, person.knife] : person.holdings;
 }
 
+// Slår to {date, value}-serier sammen til én kombineret sum-serie, ved at
+// fremad-udfylde huller med sidst kendte værdi (nyttigt når to dele af
+// porteføljen - fx kasser og kniv - er blevet prischecket på forskellige
+// datoer).
+function mergeHistories(seriesA, seriesB) {
+  const dates = Array.from(new Set([...seriesA, ...seriesB].map((p) => p.date))).sort();
+  let lastA = null;
+  let lastB = null;
+  const aByDate = Object.fromEntries(seriesA.map((p) => [p.date, p.value]));
+  const bByDate = Object.fromEntries(seriesB.map((p) => [p.date, p.value]));
+  return dates.map((date) => {
+    if (aByDate[date] != null) lastA = aByDate[date];
+    if (bByDate[date] != null) lastB = bByDate[date];
+    return { date, value: (lastA || 0) + (lastB || 0) };
+  });
+}
+
 export default function App() {
   const [personKey, setPersonKey] = useState('far');
-  const [priceState, setPriceState] = useState({}); // marketHashName -> { usdCents, error, fromCache }
+  const [priceState, setPriceState] = useState({}); // cacheKey -> { usdCents, error, fromCache }
   const [loading, setLoading] = useState(false);
   const [usdToDkk, setUsdToDkk] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
-  const { costBasis, setItemCost } = useCostBasis();
   const { manualPrices, setManualPriceDkk } = useManualPrice();
+  const [showSettings, setShowSettings] = useState(false);
+  const [proxyPrefix, setProxyPrefix] = useState(() => getSettings().proxyPrefix || '');
 
   const person = PEOPLE[personKey];
   const items = useMemo(() => allItemsFor(personKey), [personKey]);
@@ -50,11 +69,14 @@ export default function App() {
       if (cancelled) return;
       setUsdToDkk(rate);
 
-      const names = items.map((i) => i.marketHashName).filter(Boolean);
-      await fetchPrices(names, {
-        onItemResolved: (name, result) => {
+      const lookups = items
+        .filter((i) => i.marketHashName)
+        .map((i) => ({ marketHashName: i.marketHashName, paintIndex: i.paintIndex, defIndex: i.defIndex }));
+
+      await fetchPrices(lookups, {
+        onItemResolved: (key, result) => {
           if (cancelled) return;
-          setPriceState((prev) => ({ ...prev, [name]: result }));
+          setPriceState((prev) => ({ ...prev, [key]: result }));
         },
       });
       if (!cancelled) {
@@ -69,48 +91,71 @@ export default function App() {
   }, [items]);
 
   const rows = items.map((item) => {
-    const priceInfo = item.marketHashName ? priceState[item.marketHashName] : null;
+    const key = item.marketHashName ? cacheKeyFor(item.marketHashName, item.paintIndex, item.defIndex) : null;
+    const priceInfo = key ? priceState[key] : null;
     const livePriceDkk =
       priceInfo?.usdCents != null && usdToDkk ? (priceInfo.usdCents / 100) * usdToDkk : null;
     const manualDkk = manualPrices[item.id];
-    const currentPriceDkk = item.manualPriceOnly || item.unresolved || livePriceDkk == null
-      ? manualDkk ?? null
-      : livePriceDkk;
+    const currentPriceDkk = item.unresolved || livePriceDkk == null ? manualDkk ?? null : livePriceDkk;
 
-    const cost = costBasis[item.id];
     const totalValue = currentPriceDkk != null ? currentPriceDkk * item.quantity : null;
-    const totalCost = cost != null ? cost * item.quantity : null;
-    const profit = totalValue != null && totalCost != null ? totalValue - totalCost : null;
-    const profitPct = profit != null && totalCost ? profit / totalCost : null;
+
+    let profit = null;
+    if (totalValue != null) {
+      if (item.baselinePriceDkk != null) {
+        profit = (currentPriceDkk - item.baselinePriceDkk) * item.quantity;
+      } else if (item.baselineTotalDkk != null) {
+        profit = totalValue - item.baselineTotalDkk;
+      }
+    }
+    const profitPct =
+      profit != null
+        ? profit / ((item.baselinePriceDkk ?? 0) * item.quantity || item.baselineTotalDkk || 1)
+        : null;
 
     return {
       ...item,
       priceInfo,
       currentPriceDkk,
       totalValue,
-      totalCost,
       profit,
       profitPct,
-      needsManualPrice: item.manualPriceOnly || item.unresolved,
+      needsManualPrice: item.unresolved,
     };
   });
 
-  const totals = rows.reduce(
-    (acc, r) => {
-      acc.value += r.totalValue || 0;
-      acc.cost += r.totalCost || 0;
-      acc.hasCost = acc.hasCost || r.totalCost != null;
-      return acc;
-    },
-    { value: 0, cost: 0, hasCost: false }
-  );
-  const totalProfit = totals.hasCost ? totals.value - totals.cost : null;
-  const totalProfitPct = totalProfit != null && totals.cost ? totalProfit / totals.cost : null;
+  const totalValue = rows.reduce((sum, r) => sum + (r.totalValue || 0), 0);
+  const allRowsHaveProfit = rows.every((r) => r.profit != null);
+  const totalProfit = person.baselineTotalDkk
+    ? totalValue - person.baselineTotalDkk
+    : allRowsHaveProfit
+    ? rows.reduce((sum, r) => sum + r.profit, 0)
+    : null;
+  const baselineReference = person.baselineTotalDkk || totalValue - (totalProfit || 0);
+  const totalProfitPct = totalProfit != null && baselineReference ? totalProfit / baselineReference : null;
 
-  const chartData = rows
-    .filter((r) => r.totalValue != null)
-    .map((r) => ({ name: r.name.replace(' Case', ''), Værdi: Math.round(r.totalValue) }))
-    .sort((a, b) => b.Værdi - a.Værdi);
+  // Historik-graf: ark-data + evt. knivhistorik (Far) + jeres egne loggede
+  // besøg fremover.
+  const chartData = useMemo(() => {
+    let base = person.valueHistory;
+    if (person.knifeValueHistory) {
+      base = mergeHistories(person.valueHistory, person.knifeValueHistory);
+    }
+    const logged = getLoggedHistory(personKey);
+    const merged = [...base, ...logged.filter((l) => !base.some((b) => b.date === l.date))];
+    return merged
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((p) => ({ ...p, label: DATE_FMT.format(new Date(p.date)) }));
+  }, [personKey, person]);
+
+  // Log dagens samlede værdi, når priserne er færdighentet, så grafen kan
+  // fortsætte fremover.
+  useEffect(() => {
+    if (!loading && totalValue > 0) {
+      logTodaysValue(personKey, totalValue);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, totalValue, personKey]);
 
   return (
     <div className="page">
@@ -134,16 +179,16 @@ export default function App() {
       <section className="summary">
         <div className="summary-card summary-card--accent">
           <span className="summary-label">Nuværende værdi</span>
-          <span className="summary-figure">{DKK.format(totals.value)}</span>
+          <span className="summary-figure">{DKK.format(totalValue)}</span>
         </div>
         <div className="summary-card">
-          <span className="summary-label">Investeret</span>
+          <span className="summary-label">Baseline ({person.baselineDate})</span>
           <span className="summary-figure">
-            {totals.hasCost ? DKK.format(totals.cost) : '—'}
+            {baselineReference ? DKK.format(baselineReference) : '—'}
           </span>
         </div>
         <div className="summary-card">
-          <span className="summary-label">Profit</span>
+          <span className="summary-label">Profit siden {person.baselineDate}</span>
           <span
             className={
               'summary-figure ' +
@@ -152,24 +197,31 @@ export default function App() {
           >
             {totalProfit != null
               ? `${DKK.format(totalProfit)} (${(totalProfitPct * 100).toFixed(1)}%)`
-              : 'Indtast købspris nedenfor'}
+              : 'Venter på priser…'}
           </span>
         </div>
       </section>
 
-      {chartData.length > 0 && (
+      {chartData.length > 1 && (
         <section className="chart-card">
+          <p className="chart-title">Samlet porteføljeværdi over tid</p>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+            <LineChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#3a3226" />
-              <XAxis dataKey="name" stroke="#c9b98a" tick={{ fontSize: 11 }} interval={0} angle={-30} textAnchor="end" height={70} />
-              <YAxis stroke="#c9b98a" tick={{ fontSize: 11 }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+              <XAxis dataKey="label" stroke="#c9b98a" tick={{ fontSize: 11 }} />
+              <YAxis
+                stroke="#c9b98a"
+                tick={{ fontSize: 11 }}
+                tickFormatter={(v) => `${Math.round(v / 1000)}k`}
+                width={40}
+              />
               <Tooltip
                 contentStyle={{ background: '#1c1712', border: '1px solid #4a3f2e', color: '#f1e6c8' }}
                 formatter={(v) => DKK.format(v)}
+                labelFormatter={(_, payload) => payload?.[0]?.payload?.date}
               />
-              <Bar dataKey="Værdi" fill="#d4af37" radius={[3, 3, 0, 0]} />
-            </BarChart>
+              <Line type="monotone" dataKey="value" stroke="#d4af37" strokeWidth={2} dot={false} />
+            </LineChart>
           </ResponsiveContainer>
         </section>
       )}
@@ -182,7 +234,6 @@ export default function App() {
               <th>Antal</th>
               <th>Pris/stk.</th>
               <th>Værdi i alt</th>
-              <th>Købspris/stk. (DKK)</th>
               <th>Profit</th>
             </tr>
           </thead>
@@ -217,21 +268,8 @@ export default function App() {
                   )}
                 </td>
                 <td>{r.totalValue != null ? DKK.format(r.totalValue) : '—'}</td>
-                <td>
-                  <input
-                    type="number"
-                    className="cell-input"
-                    placeholder="Indtast DKK"
-                    value={costBasis[r.id] ?? ''}
-                    onChange={(e) =>
-                      setItemCost(r.id, e.target.value === '' ? '' : Number(e.target.value))
-                    }
-                  />
-                </td>
                 <td className={r.profit == null ? '' : r.profit >= 0 ? 'positive' : 'negative'}>
-                  {r.profit != null
-                    ? `${DKK.format(r.profit)} (${(r.profitPct * 100).toFixed(1)}%)`
-                    : '—'}
+                  {r.profit != null ? DKK.format(r.profit) : '—'}
                 </td>
               </tr>
             ))}
@@ -248,8 +286,40 @@ export default function App() {
             : ''}
         </span>
         <span className="footer-note">
-          Priser er den billigste aktive annonce på CSFloat og opdateres automatisk. Købspriser gemmes kun i denne browser.
+          Priser er den billigste aktive annonce på CSFloat. Profit regnes ud fra jeres egne
+          historiske priser/porteføljeværdi, ikke en indtastet købspris.
         </span>
+        <button className="settings-toggle" onClick={() => setShowSettings((s) => !s)}>
+          {showSettings ? 'Skjul indstillinger' : 'Avanceret: CSFloat-adgang'}
+        </button>
+        {showSettings && (
+          <div className="settings-panel">
+            <p>
+              Hvis priser ikke kan hentes direkte (CORS-fejl i browserens konsol), bruger appen
+              som standard en offentlig CORS-proxy (<code>allorigins.win</code>). Har din far bygget
+              sin egen proxy/API, kan du indtaste dens adresse her - den skal acceptere en
+              URL-parameter og videresende kaldet til CSFloat. Skriv <code>none</code> for at slå
+              proxy-fallback helt fra.
+            </p>
+            <div className="settings-row">
+              <input
+                type="text"
+                className="cell-input cell-input--wide"
+                placeholder="https://din-egen-proxy.dk/?url="
+                value={proxyPrefix}
+                onChange={(e) => setProxyPrefix(e.target.value)}
+              />
+              <button
+                onClick={() => {
+                  saveSettings({ ...getSettings(), proxyPrefix });
+                  window.location.reload();
+                }}
+              >
+                Gem og genindlæs
+              </button>
+            </div>
+          </div>
+        )}
       </footer>
     </div>
   );

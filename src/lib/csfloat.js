@@ -3,11 +3,41 @@
 // for almindelige GET-kald, kun for at oprette/redigere annoncer.
 //
 // Vi henter den billigste aktive "buy now"-annonce for hvert marketHashName
-// og bruger den som proxy for kassens nuværende markedspris.
+// (og evt. paintIndex, til Doppler-faser) og bruger den som proxy for
+// kassens/knivens nuværende markedspris.
+//
+// CSFloat sender ikke nødvendigvis CORS-headers, der tillader kald direkte
+// fra en browser på et andet domæne (fx jeres GitHub Pages-side). Vi prøver
+// derfor et direkte kald først, og falder automatisk tilbage til en
+// CORS-proxy, hvis det direkte kald fejler. I kan også indtaste jeres egen
+// proxy/API i appens indstillinger, hvis I får bygget en.
 
 const CSFLOAT_ENDPOINT = 'https://csfloat.com/api/v1/listings';
-const CACHE_KEY = 'kasseskabet:price-cache:v1';
+const CACHE_KEY = 'kasseskabet:price-cache:v3';
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 min - CSFloat priser ændrer sig langsomt for kasser
+const SETTINGS_KEY = 'kasseskabet:settings:v1';
+const DEFAULT_PROXY_PREFIX = 'https://api.allorigins.win/raw?url=';
+
+export function getSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveSettings(settings) {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    // ikke kritisk
+  }
+}
+
+function cacheKeyFor(marketHashName, paintIndex, defIndex) {
+  return [marketHashName, paintIndex ?? '', defIndex ?? ''].join('#');
+}
 
 function readCache() {
   try {
@@ -26,16 +56,41 @@ function writeCache(cache) {
   }
 }
 
-async function fetchLowestListingPriceCents(marketHashName) {
-  const url = `${CSFLOAT_ENDPOINT}?market_hash_name=${encodeURIComponent(
-    marketHashName
-  )}&sort_by=lowest_price&limit=1&category=1`;
+function buildUrl(marketHashName, paintIndex, defIndex) {
+  const params = new URLSearchParams({
+    market_hash_name: marketHashName,
+    sort_by: 'lowest_price',
+    limit: '1',
+    category: '1',
+  });
+  if (paintIndex != null) params.set('paint_index', String(paintIndex));
+  if (defIndex != null) params.set('def_index', String(defIndex));
+  return `${CSFLOAT_ENDPOINT}?${params.toString()}`;
+}
 
+async function fetchJson(url) {
   const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`CSFloat svarede ${res.status}`);
+  if (!res.ok) throw new Error(`Status ${res.status}`);
+  return res.json();
+}
+
+async function fetchLowestListingPriceCents(marketHashName, paintIndex, defIndex) {
+  const directUrl = buildUrl(marketHashName, paintIndex, defIndex);
+  const { proxyPrefix } = getSettings();
+  const usedProxy = proxyPrefix === 'none' ? null : proxyPrefix || DEFAULT_PROXY_PREFIX;
+
+  let data;
+  try {
+    data = await fetchJson(directUrl);
+  } catch (directErr) {
+    if (!usedProxy) throw directErr;
+    try {
+      data = await fetchJson(usedProxy + encodeURIComponent(directUrl));
+    } catch {
+      throw new Error('Kunne ikke hente pris (direkte og via proxy fejlede)');
+    }
   }
-  const data = await res.json();
+
   const listings = Array.isArray(data) ? data : data?.data ?? [];
   if (!listings.length) {
     throw new Error('Ingen aktive annoncer fundet');
@@ -43,36 +98,37 @@ async function fetchLowestListingPriceCents(marketHashName) {
   return listings[0].price; // i cent (USD)
 }
 
-// Henter priser for en liste af marketHashNames. Kalder onItemResolved
-// løbende, så UI'et kan opdateres i takt med at priser kommer ind, i stedet
-// for at vente på dem alle sammen.
-export async function fetchPrices(marketHashNames, { onItemResolved } = {}) {
+// Henter priser for en liste af { marketHashName, paintIndex? }. Kalder
+// onItemResolved løbende, så UI'et kan opdateres i takt med at priser kommer
+// ind, i stedet for at vente på dem alle sammen.
+export async function fetchPrices(lookups, { onItemResolved } = {}) {
   const cache = readCache();
   const now = Date.now();
   const results = {};
 
-  for (const name of marketHashNames) {
-    if (!name) continue;
+  for (const { marketHashName, paintIndex, defIndex } of lookups) {
+    if (!marketHashName) continue;
+    const key = cacheKeyFor(marketHashName, paintIndex, defIndex);
 
-    const cached = cache[name];
+    const cached = cache[key];
     if (cached && now - cached.fetchedAt < CACHE_TTL_MS) {
-      results[name] = { usdCents: cached.usdCents, fromCache: true, error: null };
-      onItemResolved?.(name, results[name]);
+      results[key] = { usdCents: cached.usdCents, fromCache: true, error: null };
+      onItemResolved?.(key, results[key]);
       continue;
     }
 
     try {
-      const usdCents = await fetchLowestListingPriceCents(name);
-      cache[name] = { usdCents, fetchedAt: now };
-      results[name] = { usdCents, fromCache: false, error: null };
+      const usdCents = await fetchLowestListingPriceCents(marketHashName, paintIndex, defIndex);
+      cache[key] = { usdCents, fetchedAt: now };
+      results[key] = { usdCents, fromCache: false, error: null };
     } catch (err) {
-      results[name] = {
+      results[key] = {
         usdCents: cached?.usdCents ?? null,
         fromCache: Boolean(cached),
         error: err.message || 'Ukendt fejl',
       };
     }
-    onItemResolved?.(name, results[name]);
+    onItemResolved?.(key, results[key]);
 
     // Skån CSFloats API lidt - vent kort mellem hvert kald.
     await new Promise((r) => setTimeout(r, 250));
@@ -81,6 +137,8 @@ export async function fetchPrices(marketHashNames, { onItemResolved } = {}) {
   writeCache(cache);
   return results;
 }
+
+export { cacheKeyFor };
 
 // USD/DKK-kurs. Hentes fra en gratis, nøglefri kurs-API og caches i en time.
 const FX_CACHE_KEY = 'kasseskabet:usd-dkk:v1';

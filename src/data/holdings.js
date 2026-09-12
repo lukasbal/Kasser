@@ -1,37 +1,70 @@
 // Beholdning hentet fra "CS2 Investering - Far & Søn" arket.
-// Antal er taget direkte fra arket. Snit-købspris er IKKE udfyldt automatisk,
-// fordi arket ikke indeholder en entydig gennemsnits-anskaffelsespris pr. kasse
-// (kun en handelslog + et øjebliksbillede af markedsværdi). Indtast jeres egne
-// købspriser i appen (gemmes i browserens localStorage) for at se profit.
 //
-// marketHashName er det navn, CSFloat bruger til at slå varen op. Nogle er
-// markeret unresolved: true, fordi navnet i arket ikke matcher en kendt,
-// officiel CS2-kasse - ret dem her, hvis I kender det rigtige navn.
+// Profit regnes IKKE ud fra en indtastet købspris pr. kasse (arket havde ikke
+// et entydigt tal for det). I stedet bruges jeres egne historiske tal:
+// - Far: kassepriser fra første pristjek (2025-01-10) som baseline pr. kasse,
+//   og kniven bruger den faktiske anskaffelsespris (købt til 6354,32 + 297,68
+//   i gebyrer = 6652 kr).
+// - Søn: ingen pr.-kasse baseline findes i arket, så der vises samlet profit
+//   siden første logning af porteføljeværdien (2025-01-07, 18280,29 kr).
+//
+// marketHashName er det navn, CSFloat bruger til at slå varen op.
+// paintIndex bruges kun for Doppler-kniven til at ramme den rigtige fase
+// (faser bestemmes af paint index, ikke paint seed - 420 = Phase 3 for
+// almindelig Doppler, gælder på tværs af knivtyper).
 
 export const PEOPLE = {
   far: {
     label: 'Far',
-    subtitle: "Fars CS2 kasse-investeringer",
+    subtitle: 'Fars CS2 kasse-investeringer',
+    baselineDate: '2025-01-10',
     holdings: [
-      { id: 'far-recoil', name: 'Recoil Case', marketHashName: 'Recoil Case', quantity: 1124 },
-      { id: 'far-revolution', name: 'Revolution Case', marketHashName: 'Revolution Case', quantity: 536 },
-      { id: 'far-dn', name: 'Dreams & Nightmares Case', marketHashName: 'Dreams & Nightmares Case', quantity: 292 },
-      { id: 'far-fracture', name: 'Fracture Case', marketHashName: 'Fracture Case', quantity: 494 },
-      { id: 'far-gallery', name: 'Gallery Case', marketHashName: 'Gallery Case', quantity: 80 },
-      { id: 'far-clutch', name: 'Clutch Case', marketHashName: 'Clutch Case', quantity: 620 },
+      { id: 'far-recoil', name: 'Recoil Case', marketHashName: 'Recoil Case', quantity: 1124, baselinePriceDkk: 1.38 },
+      { id: 'far-revolution', name: 'Revolution Case', marketHashName: 'Revolution Case', quantity: 536, baselinePriceDkk: 3.12 },
+      { id: 'far-dn', name: 'Dreams & Nightmares Case', marketHashName: 'Dreams & Nightmares Case', quantity: 292, baselinePriceDkk: 10.36 },
+      { id: 'far-fracture', name: 'Fracture Case', marketHashName: 'Fracture Case', quantity: 494, baselinePriceDkk: 1.89 },
+      { id: 'far-gallery', name: 'Gallery Case', marketHashName: 'Gallery Case', quantity: 80, baselinePriceDkk: 5.44 },
+      { id: 'far-clutch', name: 'Clutch Case', marketHashName: 'Clutch Case', quantity: 620, baselinePriceDkk: 2.98 },
     ],
     knife: {
       id: 'far-knife',
       name: 'M9 Bayonet | Doppler (Factory New) - Phase 3',
       marketHashName: '★ M9 Bayonet | Doppler (Factory New)',
+      paintIndex: 420, // Phase 3 - fast finish-nummer, samme på tværs af Doppler-knive
       quantity: 1,
-      note: 'Doppler-fase (Phase 3) kan ikke slås entydigt op via CSFloats almindelige søgning (kræver paint seed-filter for fasen), så prisen for kniven skal indtastes manuelt.',
-      manualPriceOnly: true,
+      baselineTotalDkk: 6652, // faktisk anskaffelsespris: 6354,32 købt + 297,68 i gebyrer
     },
+    // Historik til graf: samlet værdi af kasser pr. måned, fra "FAR - MÅNEDSOPGØR".
+    valueHistory: [
+      { date: '2025-01-10', value: 9733.2 },
+      { date: '2025-02-03', value: 10168.28 },
+      { date: '2025-02-20', value: 11942.2 },
+      { date: '2025-02-22', value: 13159.48 },
+      { date: '2025-03-11', value: 11419.88 },
+      { date: '2025-04-06', value: 9598.2 },
+      { date: '2025-05-08', value: 11006.2 },
+      { date: '2025-06-24', value: 11957.06 },
+      { date: '2025-07-28', value: 13057.42 },
+      { date: '2025-09-26', value: 13621.7 },
+      { date: '2025-10-24', value: 11507.54 },
+      { date: '2025-10-25', value: 13464.4 },
+      { date: '2026-01-27', value: 9769.42 },
+      { date: '2026-05-09', value: 12329.32 },
+    ],
+    // Knivens værdihistorik (separat, fra samme ark).
+    knifeValueHistory: [
+      { date: '2025-10-26', value: 7241 },
+      { date: '2025-11-02', value: 9700 },
+      { date: '2025-11-05', value: 7743 },
+      { date: '2026-01-27', value: 6200 },
+      { date: '2026-05-09', value: 6350 },
+    ],
   },
   soen: {
     label: 'Søn',
     subtitle: 'Mine CS2 kasse-investeringer',
+    baselineDate: '2025-01-07',
+    baselineTotalDkk: 18280.29,
     holdings: [
       { id: 'soen-cs20', name: 'CS20 Case', marketHashName: 'CS20 Case', quantity: 193 },
       { id: 'soen-chroma2', name: 'Chroma 2 Case', marketHashName: 'Chroma 2 Case', quantity: 40 },
@@ -67,19 +100,32 @@ export const PEOPLE = {
       {
         id: 'soen-genesis-terminal',
         name: 'Sealed Genesis Terminal',
-        marketHashName: null,
+        marketHashName: 'Sealed Genesis Terminal',
+        defIndex: 5176,
         quantity: 1,
-        unresolved: true,
-        note: 'Kunne ikke genkendes som en officiel CS2-kasse ud fra navnet i arket. Ret marketHashName i src/data/holdings.js, så den kan slås op.',
       },
       {
         id: 'soen-deadhand-terminal',
         name: 'Sealed Dead Hand Terminal',
-        marketHashName: null,
+        marketHashName: 'Sealed Dead Hand Terminal',
+        defIndex: 5181,
         quantity: 2,
-        unresolved: true,
-        note: 'Kunne ikke genkendes som en officiel CS2-kasse ud fra navnet i arket. Ret marketHashName i src/data/holdings.js, så den kan slås op.',
       },
+    ],
+    // Historik til graf: samlet porteføljeværdi, fra "SØN - MASTER SHEET".
+    valueHistory: [
+      { date: '2025-01-07', value: 18280.29 },
+      { date: '2025-02-04', value: 19912.1 },
+      { date: '2025-02-20', value: 22858.96 },
+      { date: '2025-02-22', value: 24383.92 },
+      { date: '2025-06-25', value: 27938.07 },
+      { date: '2025-07-28', value: 30094.15 },
+      { date: '2025-10-06', value: 29199.91 },
+      { date: '2025-10-23', value: 27593.61 },
+      { date: '2025-10-26', value: 26256.35 },
+      { date: '2025-12-05', value: 29787.39 },
+      { date: '2026-02-20', value: 25938.46 },
+      { date: '2026-05-09', value: 27706.07 },
     ],
   },
 };

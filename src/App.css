@@ -117,6 +117,13 @@ body {
   margin-bottom: 1.5rem;
 }
 
+.chart-title {
+  margin: 0 0 0.5rem;
+  color: var(--gold-soft);
+  font-size: 0.85rem;
+  text-transform: lowercase;
+}
+
 .table-wrap {
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -191,6 +198,58 @@ tr:last-child td {
 .footer-note {
   font-size: 0.72rem;
   opacity: 0.8;
+}
+
+.settings-toggle {
+  margin-top: 0.75rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--gold-soft);
+  border-radius: 999px;
+  padding: 0.35rem 1rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.settings-panel {
+  margin-top: 0.75rem;
+  text-align: left;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.settings-panel code {
+  background: #100d0a;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  color: var(--gold);
+}
+
+.settings-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.cell-input--wide {
+  flex: 1;
+  width: auto;
+}
+
+.settings-row button {
+  background: var(--gold);
+  color: #1c1712;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 @media (max-width: 640px) {
