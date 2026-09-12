@@ -12,11 +12,11 @@ En lille app til at holde øje med jeres CS2 kasse-investeringer - én visning t
 - Der er en graf over samlet porteføljeværdi over tid, bygget af jeres historiske tal fra arket. Hver gang appen åbnes, gemmes dagens samlede værdi også lokalt i browseren, så grafen fortsætter fremover.
 - Fars M9 Bayonet Doppler hentes automatisk som **Phase 3** - Doppler-faser bestemmes af "paint index" (fast pr. fase, ens på tværs af knive), ikke af paint seed, så det kan slås præcist op uden manuel indtastning.
 
-## Hvis priser ikke kan hentes (CORS-fejl)
+## Hvis priser ikke kan hentes (CORS/403-fejl)
 
-CSFloat sender ikke CORS-headers, der tillader kald direkte fra en browser på jeres GitHub Pages-domæne. Appen prøver derfor et direkte kald først, og falder automatisk tilbage til en kæde af offentlige CORS-proxyer (`codetabs.com`, `corsproxy.io`, `allorigins.win`) - falder én, prøves den næste. Under "Avanceret: CSFloat-adgang" nederst i appen kan I indtaste jeres egen proxy/API forrest i køen, hvis I får bygget en (skal acceptere en URL-parameter og videresende kaldet til CSFloat), eller skrive `none` for at slå proxy-fallback helt fra.
+CSFloat sender ikke CORS-headers, der tillader kald direkte fra en browser på jeres GitHub Pages-domæne, og deres bot-beskyttelse kan også give et direkte 403 Forbidden - både ved direkte kald og ved kald via kendte, offentlige CORS-proxyer (de bliver ofte selv blokeret, fordi de misbruges af mange forskellige apps). Appen prøver derfor et direkte kald først, og falder automatisk tilbage til en kæde af offentlige CORS-proxyer (`codetabs.com`, `corsproxy.io`, `allorigins.win`) - men disse er ikke garanteret at virke.
 
-Offentlige CORS-proxyer er gratis tredjepartstjenester uden nogen driftsgaranti - de kan opleve nedetid eller rate-limits. Hvis alle tre i kæden fejler samtidig, er den mest robuste løsning på sigt en lille selv-hostet proxy (fx en gratis Cloudflare Worker), som blot videresender kaldet til CSFloat med de rigtige headers - så er I ikke afhængige af tredjepartstjenester.
+**Den robuste løsning:** en lille, jeres egen proxy. Se `cloudflare-worker/` i denne mappe for en færdig, gratis Cloudflare Worker (ca. 5 minutters opsætning, ingen kode-erfaring nødvendig) - det er præcis den slags "API" du nævnte din far kunne bygge. Når den er sat op, indtastes dens adresse under "Avanceret: CSFloat-adgang" nederst i appen.
 
 ## Kør appen lokalt
 

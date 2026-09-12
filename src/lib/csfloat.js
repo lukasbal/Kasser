@@ -73,15 +73,15 @@ function buildUrl(marketHashName, paintIndex, defIndex) {
   return `${CSFLOAT_ENDPOINT}?${params.toString()}`;
 }
 
-async function fetchJson(url) {
-  const res = await fetch(url);
+async function fetchJson(url, headers) {
+  const res = await fetch(url, headers ? { headers } : undefined);
   if (!res.ok) throw new Error(`Status ${res.status}`);
   return res.json();
 }
 
 async function fetchLowestListingPriceCents(marketHashName, paintIndex, defIndex) {
   const directUrl = buildUrl(marketHashName, paintIndex, defIndex);
-  const { proxyPrefix } = getSettings();
+  const { proxyPrefix, csfloatApiKey } = getSettings();
 
   let candidates;
   if (proxyPrefix === 'none') {
@@ -93,10 +93,13 @@ async function fetchLowestListingPriceCents(marketHashName, paintIndex, defIndex
   }
 
   try {
-    const data = await fetchJson(directUrl);
+    // API-nøglen sendes KUN på det direkte kald til csfloat.com - aldrig til
+    // en offentlig tredjeparts-proxy, da det ville sende jeres hemmelige
+    // nøgle til en fremmed server.
+    const data = await fetchJson(directUrl, csfloatApiKey ? { Authorization: csfloatApiKey } : undefined);
     return normalizeListingsToPrice(data);
   } catch {
-    // direkte kald fejlede (typisk CORS) - prøv proxykæden herunder
+    // direkte kald fejlede (typisk CORS eller bot-beskyttelse) - prøv proxykæden herunder
   }
 
   let lastErr = new Error('Intet direkte kald og ingen proxy virkede');
