@@ -8,10 +8,10 @@
 // - Søn: ingen pr.-kasse baseline findes i arket, så der vises samlet profit
 //   siden første logning af porteføljeværdien (2025-01-07, 18280,29 kr).
 //
-// marketHashName er det navn, Pricempire bruger til at slå varen op (filtreret
-// til CSFloat-priser). Pricempire kan ikke skelne Doppler-faser fra hinanden
-// (kun ét prisdatapunkt pr. Steam-varenavn), så kniven nedenfor er markeret
-// til manuel indtastning.
+// marketHashName er det navn, CSFloat bruger til at slå varen op.
+// paintIndex bruges kun for Doppler-kniven til at ramme den rigtige fase
+// (faser bestemmes af paint index, ikke paint seed - 420 = Phase 3 for
+// almindelig Doppler, gælder på tværs af knivtyper).
 
 export const PEOPLE = {
   far: {
@@ -30,10 +30,9 @@ export const PEOPLE = {
       id: 'far-knife',
       name: 'M9 Bayonet | Doppler (Factory New) - Phase 3',
       marketHashName: '★ M9 Bayonet | Doppler (Factory New)',
+      paintIndex: 420, // Phase 3 - fast finish-nummer, samme på tværs af Doppler-knive
       quantity: 1,
       baselineTotalDkk: 6652, // faktisk anskaffelsespris: 6354,32 købt + 297,68 i gebyrer
-      unresolved: true,
-      note: 'Pricempire har kun én pris pr. Steam-varenavn og kan derfor ikke skelne Phase 3 fra de andre Doppler-faser. Indtast den korrekte pris manuelt.',
     },
     // Historik til graf: samlet værdi af kasser pr. måned, fra "FAR - MÅNEDSOPGØR".
     valueHistory: [
@@ -102,12 +101,14 @@ export const PEOPLE = {
         id: 'soen-genesis-terminal',
         name: 'Sealed Genesis Terminal',
         marketHashName: 'Sealed Genesis Terminal',
+        defIndex: 5176,
         quantity: 1,
       },
       {
         id: 'soen-deadhand-terminal',
         name: 'Sealed Dead Hand Terminal',
         marketHashName: 'Sealed Dead Hand Terminal',
+        defIndex: 5181,
         quantity: 2,
       },
     ],
