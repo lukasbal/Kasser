@@ -9,7 +9,7 @@ import {
   YAxis,
 } from 'recharts';
 import { PEOPLE } from './data/holdings';
-import { fetchPrices, fetchUsdToDkk, cacheKeyFor, getSettings, saveSettings } from './lib/csfloat';
+import { fetchAllPrices, fetchUsdToDkk, getSettings, saveSettings } from './lib/pricempire';
 import { useManualPrice } from './lib/useManualPrice';
 import { logTodaysValue, getLoggedHistory } from './lib/valueLog';
 import './App.css';
@@ -50,13 +50,14 @@ function mergeHistories(seriesA, seriesB) {
 
 export default function App() {
   const [personKey, setPersonKey] = useState('far');
-  const [priceState, setPriceState] = useState({}); // cacheKey -> { usdCents, error, fromCache }
+  const [prices, setPrices] = useState({}); // market_hash_name -> USD pris
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState(null);
   const [usdToDkk, setUsdToDkk] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   const { manualPrices, setManualPriceDkk } = useManualPrice();
   const [showSettings, setShowSettings] = useState(false);
-  const [csfloatApiKey, setCsfloatApiKey] = useState(() => getSettings().csfloatApiKey || '');
+  const [pricempireApiKey, setPricempireApiKey] = useState(() => getSettings().pricempireApiKey || '');
 
   const person = PEOPLE[personKey];
   const items = useMemo(() => allItemsFor(personKey), [personKey]);
@@ -65,20 +66,17 @@ export default function App() {
     let cancelled = false;
     async function run() {
       setLoading(true);
+      setFetchError(null);
       const rate = await fetchUsdToDkk();
       if (cancelled) return;
       setUsdToDkk(rate);
 
-      const lookups = items
-        .filter((i) => i.marketHashName)
-        .map((i) => ({ marketHashName: i.marketHashName, paintIndex: i.paintIndex, defIndex: i.defIndex }));
-
-      await fetchPrices(lookups, {
-        onItemResolved: (key, result) => {
-          if (cancelled) return;
-          setPriceState((prev) => ({ ...prev, [key]: result }));
-        },
-      });
+      try {
+        const priceMap = await fetchAllPrices();
+        if (!cancelled) setPrices(priceMap);
+      } catch (err) {
+        if (!cancelled) setFetchError(err.message || 'Ukendt fejl');
+      }
       if (!cancelled) {
         setLastUpdated(new Date());
         setLoading(false);
@@ -88,13 +86,12 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [items]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pricempireApiKey]);
 
   const rows = items.map((item) => {
-    const key = item.marketHashName ? cacheKeyFor(item.marketHashName, item.paintIndex, item.defIndex) : null;
-    const priceInfo = key ? priceState[key] : null;
-    const livePriceDkk =
-      priceInfo?.usdCents != null && usdToDkk ? (priceInfo.usdCents / 100) * usdToDkk : null;
+    const livePriceUsd = item.marketHashName ? prices[item.marketHashName] : null;
+    const livePriceDkk = livePriceUsd != null && usdToDkk ? livePriceUsd * usdToDkk : null;
     const manualDkk = manualPrices[item.id];
     const currentPriceDkk = item.unresolved || livePriceDkk == null ? manualDkk ?? null : livePriceDkk;
 
@@ -108,18 +105,12 @@ export default function App() {
         profit = totalValue - item.baselineTotalDkk;
       }
     }
-    const profitPct =
-      profit != null
-        ? profit / ((item.baselinePriceDkk ?? 0) * item.quantity || item.baselineTotalDkk || 1)
-        : null;
 
     return {
       ...item,
-      priceInfo,
       currentPriceDkk,
       totalValue,
       profit,
-      profitPct,
       needsManualPrice: item.unresolved,
     };
   });
@@ -243,10 +234,8 @@ export default function App() {
                 <td>
                   {r.name}
                   {r.note && <div className="row-note">{r.note}</div>}
-                  {r.priceInfo?.error && !r.needsManualPrice && (
-                    <div className="row-note row-note--error">
-                      Kunne ikke hente pris ({r.priceInfo.error})
-                    </div>
+                  {!r.needsManualPrice && r.currentPriceDkk == null && fetchError && (
+                    <div className="row-note row-note--error">Kunne ikke hente pris ({fetchError})</div>
                   )}
                 </td>
                 <td>{r.quantity.toLocaleString('da-DK')}</td>
@@ -280,17 +269,17 @@ export default function App() {
       <footer className="footer">
         <span>
           {loading
-            ? 'Henter priser fra CSFloat…'
+            ? 'Henter priser…'
             : lastUpdated
             ? `Priser opdateret ${lastUpdated.toLocaleTimeString('da-DK')} · kurs 1 USD = ${usdToDkk?.toFixed(2)} DKK`
             : ''}
         </span>
         <span className="footer-note">
-          Priser er den billigste aktive annonce på CSFloat. Profit regnes ud fra jeres egne
+          Priser hentes fra Pricempire (CSFloat-kilde). Profit regnes ud fra jeres egne
           historiske priser/porteføljeværdi, ikke en indtastet købspris.
         </span>
         <button className="settings-toggle" onClick={() => setShowSettings((s) => !s)}>
-          {showSettings ? 'Skjul indstillinger' : 'Avanceret: CSFloat-adgang'}
+          {showSettings ? 'Skjul indstillinger' : 'Avanceret: Pricempire-adgang'}
         </button>
         {showSettings && (
           <div className="settings-panel">
@@ -298,14 +287,14 @@ export default function App() {
               <input
                 type="password"
                 className="cell-input cell-input--wide"
-                placeholder="CSFloat API"
-                value={csfloatApiKey}
-                onChange={(e) => setCsfloatApiKey(e.target.value)}
+                placeholder="Pricempire API"
+                value={pricempireApiKey}
+                onChange={(e) => setPricempireApiKey(e.target.value)}
                 autoComplete="off"
               />
               <button
                 onClick={() => {
-                  saveSettings({ ...getSettings(), csfloatApiKey });
+                  saveSettings({ ...getSettings(), pricempireApiKey });
                   window.location.reload();
                 }}
               >

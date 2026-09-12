@@ -1,22 +1,27 @@
 # Kasseskabet
 
-En lille app til at holde øje med jeres CS2 kasse-investeringer - én visning til Far, én til Søn. Priser hentes automatisk fra [CSFloat](https://csfloat.com)'s offentlige API.
+En lille app til at holde øje med jeres CS2 kasse-investeringer - én visning til Far, én til Søn. Priser hentes fra [Pricempire](https://pricempire.com)'s developer-API, filtreret til CSFloat-priser.
 
 ## Sådan virker det
 
 - Antal kasser pr. person er hentet fra jeres Excel-ark og ligger i `src/data/holdings.js`.
-- Appen henter den billigste aktive CSFloat-annonce for hver kasse/kniv og regner værdien om til DKK.
+- Appen henter alle priser i ét samlet kald og regner værdien om til DKK.
 - **Profit** regnes ikke ud fra en indtastet købspris (arket havde ikke ét entydigt tal for det pr. kasse). I stedet bruges jeres egne historiske tal:
   - **Far**: kassepriserne fra jeres første pristjek (2025-01-10) som baseline pr. kasse, og kniven bruger den faktiske anskaffelsespris (6354,32 kr. købt + 297,68 kr. i gebyrer = 6652 kr).
   - **Søn**: ingen pr.-kasse baseline findes i arket, så profit vises samlet siden første logning af porteføljeværdien (2025-01-07, 18.280,29 kr).
 - Der er en graf over samlet porteføljeværdi over tid, bygget af jeres historiske tal fra arket. Hver gang appen åbnes, gemmes dagens samlede værdi også lokalt i browseren, så grafen fortsætter fremover.
-- Fars M9 Bayonet Doppler hentes automatisk som **Phase 3** - Doppler-faser bestemmes af "paint index" (fast pr. fase, ens på tværs af knive), ikke af paint seed, så det kan slås præcist op uden manuel indtastning.
+- Fars M9 Bayonet Doppler (Phase 3) skal indtastes manuelt - Pricempire har kun én pris pr. Steam-varenavn og kan derfor ikke skelne mellem Doppler-faser.
 
-## Hvis priser ikke kan hentes (CORS/403-fejl)
+## API-nøgle
 
-CSFloat sender ikke altid CORS-headers, der tillader kald direkte fra en browser på jeres GitHub Pages-domæne, og deres bot-beskyttelse kan også give et direkte 403 Forbidden. Appen prøver derfor et direkte kald først, og falder automatisk tilbage til en kæde af offentlige CORS-proxyer, hvis det fejler.
+Appen kræver en gratis Pricempire API-nøgle:
 
-Har I fået en CSFloat API-nøgle, kan den indtastes under "Avanceret: CSFloat-adgang" nederst i appen - den sendes kun med på det direkte kald til csfloat.com og gemmes kun lokalt i browseren.
+1. Opret en gratis konto på [pricempire.com](https://pricempire.com).
+2. Under abonnement, vælg den gratis **Trader**-plan (ingen betalingskort krævet, 30.000 kald/måned).
+3. Find din API-nøgle under din konto/API-sektion.
+4. Åbn appen → nederst → **Avanceret: Pricempire-adgang** → indtast nøglen → **Gem og genindlæs**.
+
+Nøglen gemmes kun lokalt i browseren, aldrig i selve appens kode/git.
 
 ## Kør appen lokalt
 
@@ -45,4 +50,4 @@ Mappen starter med et punktum og er teknisk set skjult i Windows Stifinder, men 
 ## Justere data
 
 - Antal, navne og hvilke varer der findes: `src/data/holdings.js`.
-- Hvor ofte priser caches (for at skåne CSFloats API): `src/lib/csfloat.js`, konstanten `CACHE_TTL_MS`.
+- Hvor ofte priser caches: `src/lib/pricempire.js`, konstanten `CACHE_TTL_MS`.
