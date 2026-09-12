@@ -1,20 +1,16 @@
-// Lille klient til CSFloats offentlige listings-endpoint.
-// Docs: https://docs.csfloat.com/ - "Get All Listings" kræver ingen API-nøgle
-// for almindelige GET-kald, kun for at oprette/redigere annoncer.
+// Lille klient til CSFloats officielle API (https://docs.csfloat.com/).
+// GET-kald til /listings kræver ingen nøgle ifølge dokumentationen, men
+// CSFloats bot-beskyttelse kan alligevel give 403 uden en gyldig
+// developer-nøgle. Med en nøgle (Authorization-header) sendes kaldet som en
+// autoriseret, legitim klient i stedet for et anonymt/proxy-kald, hvilket
+// typisk undgår den blokering.
 //
 // Vi henter den billigste aktive "buy now"-annonce for hvert marketHashName
-// (og evt. paintIndex, til Doppler-faser) og bruger den som proxy for
-// kassens/knivens nuværende markedspris.
-//
-// CSFloat sender ikke nødvendigvis CORS-headers, der tillader kald direkte
-// fra en browser på et andet domæne (fx jeres GitHub Pages-side). Vi prøver
-// derfor et direkte kald først, og falder automatisk tilbage til en kæde af
-// CORS-proxyer, hvis det direkte kald fejler - falder den ene, prøves den
-// næste. I kan også indtaste jeres egen proxy/API forrest i kæden under
-// appens indstillinger, hvis I får bygget en.
+// (og evt. paintIndex til Doppler-faser, def_index til at præcisere varer med
+// generiske navne) og bruger den som proxy for varens nuværende markedspris.
 
 const CSFLOAT_ENDPOINT = 'https://csfloat.com/api/v1/listings';
-const CACHE_KEY = 'kasseskabet:price-cache:v3';
+const CACHE_KEY = 'kasseskabet:price-cache:v4';
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 min - CSFloat priser ændrer sig langsomt for kasser
 const SETTINGS_KEY = 'kasseskabet:settings:v1';
 const DEFAULT_PROXY_PREFIXES = [
@@ -79,18 +75,17 @@ async function fetchJson(url, headers) {
   return res.json();
 }
 
+function normalizeListingsToPrice(data) {
+  const listings = Array.isArray(data) ? data : data?.data ?? [];
+  if (!listings.length) {
+    throw new Error('Ingen aktive annoncer fundet');
+  }
+  return listings[0].price; // i cent (USD)
+}
+
 async function fetchLowestListingPriceCents(marketHashName, paintIndex, defIndex) {
   const directUrl = buildUrl(marketHashName, paintIndex, defIndex);
-  const { proxyPrefix, csfloatApiKey } = getSettings();
-
-  let candidates;
-  if (proxyPrefix === 'none') {
-    candidates = [];
-  } else if (proxyPrefix) {
-    candidates = [proxyPrefix, ...DEFAULT_PROXY_PREFIXES];
-  } else {
-    candidates = DEFAULT_PROXY_PREFIXES;
-  }
+  const { csfloatApiKey } = getSettings();
 
   try {
     // API-nøglen sendes KUN på det direkte kald til csfloat.com - aldrig til
@@ -103,7 +98,7 @@ async function fetchLowestListingPriceCents(marketHashName, paintIndex, defIndex
   }
 
   let lastErr = new Error('Intet direkte kald og ingen proxy virkede');
-  for (const prefix of candidates) {
+  for (const prefix of DEFAULT_PROXY_PREFIXES) {
     try {
       const data = await fetchJson(prefix + encodeURIComponent(directUrl));
       return normalizeListingsToPrice(data);
@@ -114,17 +109,9 @@ async function fetchLowestListingPriceCents(marketHashName, paintIndex, defIndex
   throw new Error(`Kunne ikke hente pris (${lastErr.message})`);
 }
 
-function normalizeListingsToPrice(data) {
-  const listings = Array.isArray(data) ? data : data?.data ?? [];
-  if (!listings.length) {
-    throw new Error('Ingen aktive annoncer fundet');
-  }
-  return listings[0].price; // i cent (USD)
-}
-
-// Henter priser for en liste af { marketHashName, paintIndex? }. Kalder
-// onItemResolved løbende, så UI'et kan opdateres i takt med at priser kommer
-// ind, i stedet for at vente på dem alle sammen.
+// Henter priser for en liste af { marketHashName, paintIndex?, defIndex? }.
+// Kalder onItemResolved løbende, så UI'et kan opdateres i takt med at priser
+// kommer ind, i stedet for at vente på dem alle sammen.
 export async function fetchPrices(lookups, { onItemResolved } = {}) {
   const cache = readCache();
   const now = Date.now();

@@ -1,6 +1,6 @@
 # Kasseskabet
 
-En lille app til at holde øje med jeres CS2 kasse-investeringer - én visning til Far, én til Søn. Priser hentes automatisk fra [CSFloat](https://csfloat.com)'s offentlige API.
+En lille app til at holde øje med jeres CS2 kasse-investeringer - én visning til Far, én til Søn. Priser hentes fra [CSFloat](https://csfloat.com)'s API.
 
 ## Sådan virker det
 
@@ -12,11 +12,11 @@ En lille app til at holde øje med jeres CS2 kasse-investeringer - én visning t
 - Der er en graf over samlet porteføljeværdi over tid, bygget af jeres historiske tal fra arket. Hver gang appen åbnes, gemmes dagens samlede værdi også lokalt i browseren, så grafen fortsætter fremover.
 - Fars M9 Bayonet Doppler hentes automatisk som **Phase 3** - Doppler-faser bestemmes af "paint index" (fast pr. fase, ens på tværs af knive), ikke af paint seed, så det kan slås præcist op uden manuel indtastning.
 
-## Hvis priser ikke kan hentes (CORS/403-fejl)
+## API-nøgle
 
-CSFloat sender ikke altid CORS-headers, der tillader kald direkte fra en browser på jeres GitHub Pages-domæne, og deres bot-beskyttelse kan også give et direkte 403 Forbidden. Appen prøver derfor et direkte kald først, og falder automatisk tilbage til en kæde af offentlige CORS-proxyer, hvis det fejler.
+CSFloats GET-kald kræver ifølge deres dokumentation ingen nøgle, men deres bot-beskyttelse kan alligevel give en 403-fejl på anonyme kald. Har I fået en developer-nøgle fra CSFloat (under [csfloat.com/profile](https://csfloat.com/profile) → "developer"-fanen), indtastes den under "Avanceret: CSFloat-adgang" nederst i appen. Den sendes kun med på det direkte kald til csfloat.com og gemmes kun lokalt i browseren - aldrig i selve appens kode/git.
 
-Har I fået en CSFloat API-nøgle, kan den indtastes under "Avanceret: CSFloat-adgang" nederst i appen - den sendes kun med på det direkte kald til csfloat.com og gemmes kun lokalt i browseren.
+Virker det stadig ikke selv med en nøgle, prøver appen automatisk en kæde af offentlige CORS-proxyer som sidste udvej (uden nøglen, da den aldrig bør sendes til en fremmed tredjepart).
 
 ## Kør appen lokalt
 

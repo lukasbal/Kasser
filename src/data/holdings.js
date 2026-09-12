@@ -11,7 +11,8 @@
 // marketHashName er det navn, CSFloat bruger til at slå varen op.
 // paintIndex bruges kun for Doppler-kniven til at ramme den rigtige fase
 // (faser bestemmes af paint index, ikke paint seed - 420 = Phase 3 for
-// almindelig Doppler, gælder på tværs af knivtyper).
+// almindelig Doppler, gælder på tværs af knivtyper). defIndex bruges til at
+// præcisere et par varer med generiske navne.
 
 export const PEOPLE = {
   far: {

@@ -88,7 +88,8 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [items]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, csfloatApiKey]);
 
   const rows = items.map((item) => {
     const key = item.marketHashName ? cacheKeyFor(item.marketHashName, item.paintIndex, item.defIndex) : null;
@@ -108,10 +109,6 @@ export default function App() {
         profit = totalValue - item.baselineTotalDkk;
       }
     }
-    const profitPct =
-      profit != null
-        ? profit / ((item.baselinePriceDkk ?? 0) * item.quantity || item.baselineTotalDkk || 1)
-        : null;
 
     return {
       ...item,
@@ -119,7 +116,6 @@ export default function App() {
       currentPriceDkk,
       totalValue,
       profit,
-      profitPct,
       needsManualPrice: item.unresolved,
     };
   });
