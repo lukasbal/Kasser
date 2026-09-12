@@ -1,35 +1,41 @@
-# Fars kasse-portefølje
+# Kasseskabet
 
-Én selvstændig HTML-fil. Ingen build, ingen server, ingen GitHub Actions.
+En lille app til at holde øje med jeres CS2 kasse-investeringer - én visning til Far, én til Søn. Priser hentes automatisk fra [CSFloat](https://csfloat.com)'s offentlige API.
 
-## Hvordan priser hentes
+## Sådan virker det
 
-Ved åbning beder siden om en **CSFloat API-nøgle** (find/opret én under "Developer" på
-csfloat.com/profile). Nøglen bruges direkte fra browseren til at kalde CSFloat's officielle
-API (`https://csfloat.com/api/v1/listings`) og hentes ikke via nogen mellemmand.
+- Antal kasser pr. person er hentet fra jeres Excel-ark og ligger i `src/data/holdings.js`.
+- Appen henter den billigste aktive CSFloat-annonce for hver kasse og regner værdien om til DKK.
+- I skal selv indtaste jeres gennemsnitlige **købspris pr. stk.** i tabellen for at se profit - arket havde ikke et entydigt tal for det. Det gemmes automatisk i browseren (så det er der næste gang, men kun på den computer/browser).
+- To varer kunne appen ikke slå op automatisk:
+  - Fars M9 Bayonet Doppler (Phase 3) - Doppler-faser kan ikke findes præcist via CSFloats almindelige søgning, så prisen skal indtastes manuelt.
+  - Sønnens "Sealed Genesis Terminal" og "Sealed Dead Hand Terminal" - navnene matchede ikke en kendt CS2-kasse. Ret `marketHashName` i `src/data/holdings.js`, hvis I finder det rigtige navn, så bliver de også hentet automatisk.
 
-**Nøglen gemmes ingen steder** — ikke i en fil, ikke i localStorage, ikke i cookies. Den
-lever kun i sidens hukommelse, mens den er åben, og skal tastes ind igen næste gang siden
-åbnes. Kun de beregnede kroneværdier (til grafen) gemmes lokalt i browseren — aldrig nøglen.
-
-## Hvis en pris ikke hentes korrekt
-
-Doppler-kniven matches på wear (fx "Factory New") — ikke den præcise fase, da faser ikke er
-en del af Steams navngivning. Ret linjen markeret `KNIFE` øverst i filen, hvis kniven har en
-anden wear.
-
-Antal af hver kasse står i `HOLDINGS` øverst i filen — ret dem der, hvis beholdningen ændrer sig.
-
-## Hoste gratis (GitHub Pages)
-
-1. Læg `index.html` i repoet, commit, push
-2. Settings → Pages → Deploy from branch → `main` / root
-3. Siden er klar på `https://<bruger>.github.io/<repo>/`
-
-## Kør lokalt
-
-Åbn `index.html` direkte i en browser, eller:
+## Kør appen lokalt
 
 ```bash
-python3 -m http.server 8000
+npm install
+npm run dev
 ```
+
+Åbn linket der vises i terminalen (typisk `http://localhost:5173`).
+
+## Læg den på GitHub med GitHub Desktop
+
+1. Åbn GitHub Desktop → **File → Add local repository** → vælg denne mappe.
+2. Hvis den spørger om at initialisere et git-repo, sig ja.
+3. Skriv en commit-besked (fx "Første version") og tryk **Commit to main**.
+4. Tryk **Publish repository** øverst. Du kan vælge om det skal være privat eller offentligt.
+5. Gå ind på repoet på github.com → **Settings → Pages** → under "Build and deployment" vælg **Source: GitHub Actions**.
+6. Push'et starter automatisk en workflow (fanen **Actions** i repoet), som bygger og lægger appen op. Efter et minuts tid ligger den på `https://<dit-brugernavn>.github.io/<repo-navn>/`.
+
+Fremover: hver gang I laver ændringer og trykker **Commit** + **Push origin** i GitHub Desktop, opdaterer siden sig selv.
+
+### Hvis `.github`-mappen ikke dukker op i GitHub Desktop
+
+Mappen starter med et punktum og er teknisk set skjult i Windows Stifinder, men GitHub Desktop viser og committer den fint alligevel - den behøver ikke være synlig i Stifinder for at blive committet. Tjek under "Changes" i GitHub Desktop, at filerne i `.github/workflows/` er med i den første commit.
+
+## Justere data
+
+- Antal, navne og hvilke varer der findes: `src/data/holdings.js`.
+- Hvor ofte priser caches (for at skåne CSFloats API): `src/lib/csfloat.js`, konstanten `CACHE_TTL_MS`.
