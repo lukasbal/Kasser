@@ -14,9 +14,9 @@ En lille app til at holde øje med jeres CS2 kasse-investeringer - én visning t
 
 ## Hvis priser ikke kan hentes (CORS/403-fejl)
 
-CSFloat sender ikke CORS-headers, der tillader kald direkte fra en browser på jeres GitHub Pages-domæne, og deres bot-beskyttelse kan også give et direkte 403 Forbidden - både ved direkte kald og ved kald via kendte, offentlige CORS-proxyer (de bliver ofte selv blokeret, fordi de misbruges af mange forskellige apps). Appen prøver derfor et direkte kald først, og falder automatisk tilbage til en kæde af offentlige CORS-proxyer (`codetabs.com`, `corsproxy.io`, `allorigins.win`) - men disse er ikke garanteret at virke.
+CSFloat sender ikke altid CORS-headers, der tillader kald direkte fra en browser på jeres GitHub Pages-domæne, og deres bot-beskyttelse kan også give et direkte 403 Forbidden. Appen prøver derfor et direkte kald først, og falder automatisk tilbage til en kæde af offentlige CORS-proxyer, hvis det fejler.
 
-**Den robuste løsning:** en lille, jeres egen proxy. Se `cloudflare-worker/` i denne mappe for en færdig, gratis Cloudflare Worker (ca. 5 minutters opsætning, ingen kode-erfaring nødvendig) - det er præcis den slags "API" du nævnte din far kunne bygge. Når den er sat op, indtastes dens adresse under "Avanceret: CSFloat-adgang" nederst i appen.
+Har I fået en CSFloat API-nøgle, kan den indtastes under "Avanceret: CSFloat-adgang" nederst i appen - den sendes kun med på det direkte kald til csfloat.com og gemmes kun lokalt i browseren.
 
 ## Kør appen lokalt
 

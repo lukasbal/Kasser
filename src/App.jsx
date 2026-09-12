@@ -56,7 +56,6 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const { manualPrices, setManualPriceDkk } = useManualPrice();
   const [showSettings, setShowSettings] = useState(false);
-  const [proxyPrefix, setProxyPrefix] = useState(() => getSettings().proxyPrefix || '');
   const [csfloatApiKey, setCsfloatApiKey] = useState(() => getSettings().csfloatApiKey || '');
 
   const person = PEOPLE[personKey];
@@ -295,17 +294,11 @@ export default function App() {
         </button>
         {showSettings && (
           <div className="settings-panel">
-            <p>
-              <strong>CSFloat API-nøgle</strong> (valgfri): hvis din far har fået en
-              developer-nøgle fra CSFloat, kan du indtaste den her. Den sendes <em>kun</em> med på
-              det direkte kald til csfloat.com - aldrig til de offentlige proxyer nedenfor. Den
-              gemmes kun lokalt i denne browser, aldrig i selve appens kode/git.
-            </p>
             <div className="settings-row">
               <input
                 type="password"
                 className="cell-input cell-input--wide"
-                placeholder="CSFloat API-nøgle"
+                placeholder="CSFloat API"
                 value={csfloatApiKey}
                 onChange={(e) => setCsfloatApiKey(e.target.value)}
                 autoComplete="off"
@@ -313,30 +306,6 @@ export default function App() {
               <button
                 onClick={() => {
                   saveSettings({ ...getSettings(), csfloatApiKey });
-                  window.location.reload();
-                }}
-              >
-                Gem og genindlæs
-              </button>
-            </div>
-            <p>
-              Hvis priser stadig ikke kan hentes direkte selv med en nøgle (CORS-fejl i
-              browserens konsol), prøver appen automatisk en række offentlige CORS-proxyer i
-              rækkefølge. Har din far i stedet bygget sin egen proxy (se{' '}
-              <code>cloudflare-worker/</code>), kan du indtaste dens adresse her - den sættes
-              forrest i køen. Skriv <code>none</code> for at slå proxy-fallback helt fra.
-            </p>
-            <div className="settings-row">
-              <input
-                type="text"
-                className="cell-input cell-input--wide"
-                placeholder="https://din-egen-proxy.dk/?url="
-                value={proxyPrefix}
-                onChange={(e) => setProxyPrefix(e.target.value)}
-              />
-              <button
-                onClick={() => {
-                  saveSettings({ ...getSettings(), proxyPrefix });
                   window.location.reload();
                 }}
               >
