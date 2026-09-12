@@ -295,11 +295,11 @@ export default function App() {
         {showSettings && (
           <div className="settings-panel">
             <p>
-              Hvis priser ikke kan hentes direkte (CORS-fejl i browserens konsol), bruger appen
-              som standard en offentlig CORS-proxy (<code>allorigins.win</code>). Har din far bygget
-              sin egen proxy/API, kan du indtaste dens adresse her - den skal acceptere en
-              URL-parameter og videresende kaldet til CSFloat. Skriv <code>none</code> for at slå
-              proxy-fallback helt fra.
+              Hvis priser ikke kan hentes direkte (CORS-fejl i browserens konsol), prøver appen
+              automatisk en række offentlige CORS-proxyer i rækkefølge, indtil én virker. Har din
+              far bygget sin egen proxy/API, kan du indtaste dens adresse her - den sættes forrest
+              i køen og skal acceptere en URL-parameter og videresende kaldet til CSFloat. Skriv{' '}
+              <code>none</code> for at slå proxy-fallback helt fra.
             </p>
             <div className="settings-row">
               <input

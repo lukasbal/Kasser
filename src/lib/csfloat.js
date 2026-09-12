@@ -8,15 +8,20 @@
 //
 // CSFloat sender ikke nødvendigvis CORS-headers, der tillader kald direkte
 // fra en browser på et andet domæne (fx jeres GitHub Pages-side). Vi prøver
-// derfor et direkte kald først, og falder automatisk tilbage til en
-// CORS-proxy, hvis det direkte kald fejler. I kan også indtaste jeres egen
-// proxy/API i appens indstillinger, hvis I får bygget en.
+// derfor et direkte kald først, og falder automatisk tilbage til en kæde af
+// CORS-proxyer, hvis det direkte kald fejler - falder den ene, prøves den
+// næste. I kan også indtaste jeres egen proxy/API forrest i kæden under
+// appens indstillinger, hvis I får bygget en.
 
 const CSFLOAT_ENDPOINT = 'https://csfloat.com/api/v1/listings';
 const CACHE_KEY = 'kasseskabet:price-cache:v3';
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 min - CSFloat priser ændrer sig langsomt for kasser
 const SETTINGS_KEY = 'kasseskabet:settings:v1';
-const DEFAULT_PROXY_PREFIX = 'https://api.allorigins.win/raw?url=';
+const DEFAULT_PROXY_PREFIXES = [
+  'https://api.codetabs.com/v1/proxy?quest=',
+  'https://corsproxy.io/?url=',
+  'https://api.allorigins.win/raw?url=',
+];
 
 export function getSettings() {
   try {
@@ -77,20 +82,36 @@ async function fetchJson(url) {
 async function fetchLowestListingPriceCents(marketHashName, paintIndex, defIndex) {
   const directUrl = buildUrl(marketHashName, paintIndex, defIndex);
   const { proxyPrefix } = getSettings();
-  const usedProxy = proxyPrefix === 'none' ? null : proxyPrefix || DEFAULT_PROXY_PREFIX;
 
-  let data;
-  try {
-    data = await fetchJson(directUrl);
-  } catch (directErr) {
-    if (!usedProxy) throw directErr;
-    try {
-      data = await fetchJson(usedProxy + encodeURIComponent(directUrl));
-    } catch {
-      throw new Error('Kunne ikke hente pris (direkte og via proxy fejlede)');
-    }
+  let candidates;
+  if (proxyPrefix === 'none') {
+    candidates = [];
+  } else if (proxyPrefix) {
+    candidates = [proxyPrefix, ...DEFAULT_PROXY_PREFIXES];
+  } else {
+    candidates = DEFAULT_PROXY_PREFIXES;
   }
 
+  try {
+    const data = await fetchJson(directUrl);
+    return normalizeListingsToPrice(data);
+  } catch {
+    // direkte kald fejlede (typisk CORS) - prøv proxykæden herunder
+  }
+
+  let lastErr = new Error('Intet direkte kald og ingen proxy virkede');
+  for (const prefix of candidates) {
+    try {
+      const data = await fetchJson(prefix + encodeURIComponent(directUrl));
+      return normalizeListingsToPrice(data);
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw new Error(`Kunne ikke hente pris (${lastErr.message})`);
+}
+
+function normalizeListingsToPrice(data) {
   const listings = Array.isArray(data) ? data : data?.data ?? [];
   if (!listings.length) {
     throw new Error('Ingen aktive annoncer fundet');
